@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>คลังพัสดุ — ระบบจัดการสต๊อก</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --ink:#161B22;
+    --paper:#F6F4EE;
+    --panel:#FFFFFF;
+    --line:#E3DFD4;
+    --navy:#1B2A4A;
+    --navy-2:#243657;
+    --amber:#C9962C;
+    --amber-dim:#EADFC5;
+    --green:#2F6E4E;
+    --green-dim:#E1EEE6;
+    --red:#B4432F;
+    --red-dim:#F5E2DD;
+    --muted:#6B7280;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.brand{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;}
+
+  /* ---------- Layout ---------- */
+  #app{display:flex;min-height:100vh;}
+  #sidebar{
+    width:220px;flex-shrink:0;background:var(--navy);
+    color:#EDEFF5;display:flex;flex-direction:column;
+    position:sticky;top:0;height:100vh;
+  }
+  #sidebar .brand{
+    padding:22px 18px 16px;font-size:18px;font-weight:700;
+    letter-spacing:.02em;border-bottom:1px solid rgba(255,255,255,.1);
+    display:flex;align-items:center;gap:10px;
+  }
+  #sidebar .brand .mark{
+    width:26px;height:26px;background:var(--amber);border-radius:5px;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--navy);font-weight:700;font-size:13px;
+  }
+  .navlist{list-style:none;margin:0;padding:14px 10px;flex:1;}
+  .navlist li{margin-bottom:2px;}
+  .navlist button{
+    width:100%;text-align:left;background:none;border:none;color:#C7CCDA;
+    padding:10px 12px;border-radius:8px;font-size:14px;font-weight:500;
+    display:flex;align-items:center;gap:10px;transition:background .12s,color .12s;
+  }
+  .navlist button .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.5;}
+  .navlist button:hover{background:rgba(255,255,255,.06);color:#fff;}
+  .navlist button.active{background:var(--navy-2);color:#fff;}
+  .navlist button.active .dot{background:var(--amber);opacity:1;}
+  #sidebar .foot{padding:14px 18px;border-top:1px solid rgba(255,255,255,.1);font-size:12px;color:#8D93A6;}
+  #sidebar .foot .status-ok{color:#7FD8A6;}
+  #sidebar .foot .status-bad{color:#E39B8A;}
+
+  #main{flex:1;min-width:0;padding:28px 34px 60px;max-width:1180px;}
+  .pagehead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px;}
+  .pagehead h1{font-size:22px;margin:0;font-weight:700;}
+  .pagehead p{margin:4px 0 0;color:var(--muted);font-size:13.5px;}
+
+  .grid{display:grid;gap:16px;}
+  .grid.cols-4{grid-template-columns:repeat(4,1fr);}
+  .grid.cols-3{grid-template-columns:repeat(3,1fr);}
+  .grid.cols-2{grid-template-columns:repeat(2,1fr);}
+  @media(max-width:900px){.grid.cols-4,.grid.cols-3,.grid.cols-2{grid-template-columns:1fr 1fr;}}
+  @media(max-width:600px){#sidebar{width:64px;}#sidebar .brand span:not(.mark){display:none;}#sidebar .navlist button span.label{display:none;}#main{padding:18px;}.grid.cols-4,.grid.cols-3,.grid.cols-2{grid-template-columns:1fr;}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;}
+  .stat{display:flex;flex-direction:column;gap:6px;}
+  .stat .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+  .stat .v{font-size:26px;font-weight:600;font-family:'Space Grotesk',sans-serif;}
+  .stat .v.warn{color:var(--red);}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;padding:8px 10px;border-bottom:1px solid var(--line);}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:#FBFAF6;}
+  .tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:600;}
+  .tag.in{background:var(--green-dim);color:var(--green);}
+  .tag.out{background:var(--red-dim);color:var(--red);}
+  .tag.mv{background:var(--amber-dim);color:#8A661C;}
+  .tag.adj{background:#E7E9F0;color:var(--navy);}
+
+  .gauge{width:70px;height:8px;background:#EEE9DC;border-radius:6px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:8px;}
+  .gauge > i{display:block;height:100%;background:var(--green);}
+  .gauge.low > i{background:var(--red);}
+
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font-size:13.5px;font-weight:600;color:var(--ink);}
+  .btn:hover{border-color:#C9C2AD;}
+  .btn.primary{background:var(--navy);color:#fff;border-color:var(--navy);}
+  .btn.primary:hover{background:var(--navy-2);}
+  .btn.amber{background:var(--amber);color:#3A2A05;border-color:var(--amber);}
+  .btn.danger{color:var(--red);border-color:var(--red-dim);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .btn.sm{padding:5px 10px;font-size:12.5px;}
+
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
+  .field label{font-size:12.5px;font-weight:600;color:#3C4351;}
+  .field input,.field select,.field textarea{
+    padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;background:#FEFDFB;
+  }
+  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--navy-2);outline-offset:0;border-color:var(--navy-2);}
+  .row{display:flex;gap:12px;flex-wrap:wrap;}
+  .row > .field{flex:1;min-width:140px;}
+
+  .empty{padding:40px 20px;text-align:center;color:var(--muted);}
+  .empty .big{font-size:15px;color:var(--ink);font-weight:600;margin-bottom:4px;}
+
+  .toast-wrap{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:99;}
+  .toast{background:var(--navy);color:#fff;padding:11px 16px;border-radius:8px;font-size:13.5px;box-shadow:0 6px 18px rgba(0,0,0,.18);max-width:320px;}
+  .toast.err{background:var(--red);}
+  .toast.ok{background:var(--green);}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(20,20,24,.4);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
+  .modal{background:var(--panel);border-radius:12px;padding:22px;max-width:460px;width:100%;max-height:86vh;overflow:auto;}
+  .modal h3{margin:0 0 14px;font-size:16px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;}
+
+  .setup{max-width:520px;margin:60px auto;}
+  .setup ol{padding-left:20px;font-size:13.5px;color:#3C4351;line-height:1.7;}
+  .setup code{background:#EEE9DC;padding:1px 6px;border-radius:4px;font-size:12.5px;}
+  .badge-step{display:inline-flex;width:20px;height:20px;background:var(--amber);color:#3A2A05;border-radius:50%;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-right:6px;}
+
+  .kv{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px dashed var(--line);}
+  .kv:last-child{border-bottom:none;}
+  .link{color:var(--navy);text-decoration:underline;cursor:pointer;background:none;border:none;font-size:inherit;padding:0;}
+
+  .searchbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+  .searchbar input{flex:1;min-width:180px;}
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+/* =========================================================================
+   STOCK MANAGER — single-file app, persisted live to Google Sheets
+   ========================================================================= */
+
+const SHEET_NAMES = { items:'Items', warehouses:'Warehouses', tx:'Transactions' };
+const HEADERS = {
+  Items: ['SKU','Name','Category','Unit','ReorderPoint','Active'],
+  Warehouses: ['Code','Name','Active'],
+  Transactions: ['ID','Timestamp','Type','SKU','WarehouseCode','ToWarehouseCode','Qty','Note','Ref']
+};
+
+let state = {
+  clientId:'', spreadsheetId:'', accessToken:'',
+  connected:false, connecting:false,
+  items:[], warehouses:[], tx:[],
+  view:'dashboard',
+  tokenClient:null,
+};
+
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+function toast(msg, kind){
+  const wrap = document.getElementById('toastWrap');
+  const el = document.createElement('div');
+  el.className = 'toast'+(kind?' '+kind:'');
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 3400);
+}
+
+/* ---------------------------- Persistent settings (non-sensitive) --------------------------- */
+async function loadSettings(){
+  try{
+    const r = await window.storage.get('settings', false);
+    if(r && r.value){
+      const s = JSON.parse(r.value);
+      state.clientId = s.clientId || '';
+      state.spreadsheetId = s.spreadsheetId || '';
+    }
+  }catch(e){ /* no settings yet */ }
+}
+async function saveSettings(){
+  try{
+    await window.storage.set('settings', JSON.stringify({clientId:state.clientId, spreadsheetId:state.spreadsheetId}), false);
+  }catch(e){ console.error('save settings failed', e); }
+}
+
+/* ---------------------------- Google OAuth ---------------------------- */
+function ensureTokenClient(){
+  if(state.tokenClient) return state.tokenClient;
+  if(!window.google || !window.google.accounts){ return null; }
+  state.tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: state.clientId,
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    callback: '' // set per-call
+  });
+  return state.tokenClient;
+}
+
+function requestToken(interactive){
+  return new Promise((resolve, reject)=>{
+    const tc = ensureTokenClient();
+    if(!tc){ reject(new Error('Google Identity Services ยังโหลดไม่เสร็จ ลองใหม่อีกครั้ง')); return; }
+    tc.callback = (resp)=>{
+      if(resp.error){ reject(new Error(resp.error)); return; }
+      state.accessToken = resp.access_token;
+      resolve(resp.access_token);
+    };
+    tc.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+  });
+}
+
+/* ---------------------------- Sheets API ---------------------------- */
+async function sheetsFetch(path, opts={}){
+  const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+state.spreadsheetId+path, {
+    ...opts,
+    headers:{ 'Authorization':'Bearer '+state.accessToken, 'Content-Type':'application/json', ...(opts.headers||{}) }
+  });
+  if(res.status===401){
+    await requestToken(false);
+    return sheetsFetch(path, opts);
+  }
+  if(!res.ok){
+    const body = await res.text();
+    throw new Error('Sheets API error ('+res.status+'): '+body.slice(0,200));
+  }
+  return res.json();
+}
+
+async function getSpreadsheetMeta(){
+  return sheetsFetch('?fields=sheets.properties.title');
+}
+
+async function ensureSheetsExist(){
+  const meta = await getSpreadsheetMeta();
+  const existing = (meta.sheets||[]).map(s=>s.properties.title);
+  const toAdd = Object.values(SHEET_NAMES).filter(n=>!existing.includes(n));
+  if(toAdd.length){
+    await sheetsFetch(':batchUpdate', {
+      method:'POST',
+      body: JSON.stringify({ requests: toAdd.map(title=>({ addSheet:{ properties:{ title } } })) })
+    });
+  }
+  // ensure headers
+  for(const key of ['Items','Warehouses','Transactions']){
+    const r = await sheetsFetch('/values/'+encodeURIComponent(key+'!A1:Z1'));
+    if(!r.values || !r.values.length){
+      await sheetsFetch('/values/'+encodeURIComponent(key+'!A1')+'?valueInputOption=USER_ENTERED', {
+        method:'PUT',
+        body: JSON.stringify({ range:key+'!A1', values:[HEADERS[key]] })
+      });
+    }
+  }
+}
+
+async function readAll(){
+  const [i,w,t] = await Promise.all([
+    sheetsFetch('/values/'+encodeURIComponent('Items!A2:Z10000')),
+    sheetsFetch('/values/'+encodeURIComponent('Warehouses!A2:Z10000')),
+    sheetsFetch('/values/'+encodeURIComponent('Transactions!A2:Z10000')),
+  ]);
+  state.items = (i.values||[]).map((r,idx)=>({
+    rowNum: idx+2, sku:r[0]||'', name:r[1]||'', category:r[2]||'', unit:r[3]||'',
+    reorderPoint: parseFloat(r[4]||'0')||0, active: (r[5]||'TRUE')!=='FALSE'
+  })).filter(x=>x.sku);
+  state.warehouses = (w.values||[]).map((r,idx)=>({
+    rowNum: idx+2, code:r[0]||'', name:r[1]||'', active:(r[2]||'TRUE')!=='FALSE'
+  })).filter(x=>x.code);
+  state.tx = (t.values||[]).map((r,idx)=>({
+    rowNum: idx+2, id:r[0]||'', ts:r[1]||'', type:r[2]||'', sku:r[3]||'', wh:r[4]||'',
+    toWh:r[5]||'', qty: parseFloat(r[6]||'0')||0, note:r[7]||'', ref:r[8]||''
+  })).filter(x=>x.id);
+}
+
+async function appendRow(sheetName, rowArray){
+  const r = await sheetsFetch('/values/'+encodeURIComponent(sheetName+'!A1')+':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS', {
+    method:'POST',
+    body: JSON.stringify({ range:sheetName+'!A1', values:[rowArray] })
+  });
+  return r;
+}
+async function updateRow(sheetName, rowNum, rowArray){
+  await sheetsFetch('/values/'+encodeURIComponent(sheetName+'!A'+rowNum)+'?valueInputOption=USER_ENTERED', {
+    method:'PUT',
+    body: JSON.stringify({ range:sheetName+'!A'+rowNum, values:[rowArray] })
+  });
+}
+
+/* ---------------------------- Domain logic ---------------------------- */
+function itemBySku(sku){ return state.items.find(i=>i.sku===sku); }
+function whByCode(code){ return state.warehouses.find(w=>w.code===code); }
+
+function stockOf(sku, whCode){
+  let q = 0;
+  for(const t of state.tx){
+    if(t.sku!==sku) continue;
+    if(t.type==='RECEIVE' && t.wh===whCode) q += t.qty;
+    else if(t.type==='ISSUE' && t.wh===whCode) q -= t.qty;
+    else if(t.type==='ADJUST' && t.wh===whCode) q += t.qty;
+    else if(t.type==='TRANSFER'){
+      if(t.wh===whCode) q -= t.qty;
+      if(t.toWh===whCode) q += t.qty;
+    }
+  }
+  return q;
+}
+function totalStock(sku){
+  let q=0;
+  for(const w of state.warehouses) q += stockOf(sku, w.code);
+  return q;
+}
+
+async function addTransaction(type, sku, wh, toWh, qty, note, ref){
+  const id = uid();
+  const ts = new Date().toISOString();
+  const row = [id, ts, type, sku, wh||'', toWh||'', qty, note||'', ref||''];
+  await appendRow('Transactions', row);
+  state.tx.push({ rowNum: state.tx.length+2, id, ts, type, sku, wh:wh||'', toWh:toWh||'', qty, note:note||'', ref:ref||'' });
+}
+
+/* ---------------------------- Rendering ---------------------------- */
+const root = document.getElementById('app');
+
+function render(){
+  if(!state.connected){ renderSetup(); return; }
+  root.innerHTML = `
+    <div id="sidebar">
+      <div class="brand"><span class="mark">คส</span><span>คลังพัสดุ</span></div>
+      <ul class="navlist">
+        ${navItem('dashboard','แดชบอร์ด')}
+        ${navItem('stock','สต๊อกคงเหลือ')}
+        ${navItem('receive','รับเข้า')}
+        ${navItem('issue','เบิกออก')}
+        ${navItem('transfer','โอนย้ายคลัง')}
+        ${navItem('history','ประวัติรายการ')}
+        ${navItem('items','สินค้า')}
+        ${navItem('warehouses','คลังสินค้า')}
+        ${navItem('settings','ตั้งค่า')}
+      </ul>
+      <div class="foot"><span class="status-ok">● เชื่อมต่อ Google Sheets แล้ว</span></div>
+    </div>
+    <div id="main"></div>
+  `;
+  document.querySelectorAll('.navlist button').forEach(b=>{
+    b.onclick = ()=>{ state.view = b.dataset.view; render(); };
+  });
+  const main = document.getElementById('main');
+  const views = { dashboard:viewDashboard, stock:viewStock, receive:()=>viewMove('RECEIVE'), issue:()=>viewMove('ISSUE'), transfer:viewTransfer, history:viewHistory, items:viewItems, warehouses:viewWarehouses, settings:viewSettings };
+  main.innerHTML = (views[state.view]||viewDashboard)();
+  bindViewEvents();
+}
+function navItem(view,label){
+  return `<li><button data-view="${view}" class="${state.view===view?'active':''}"><span class="dot"></span><span class="label">${label}</span></button></li>`;
+}
+
+function viewDashboard(){
+  const totalSkus = state.items.length;
+  const totalWh = state.warehouses.length;
+  const lowStock = state.items.filter(i=>totalStock(i.sku) <= i.reorderPoint);
+  const recent = [...state.tx].sort((a,b)=>b.ts.localeCompare(a.ts)).slice(0,8);
+  return `
+    <div class="pagehead"><div><h1>แดชบอร์ด</h1><p>ภาพรวมสต๊อกทั้งหมด อัปเดตแบบเรียลไทม์จาก Google Sheets</p></div>
+      <button class="btn primary" id="btnSync">↻ ซิงก์ข้อมูล</button>
+    </div>
+    <div class="grid cols-4" style="margin-bottom:18px;">
+      <div class="card stat"><div class="k">รายการสินค้า</div><div class="v">${totalSkus}</div></div>
+      <div class="card stat"><div class="k">คลังสินค้า</div><div class="v">${totalWh}</div></div>
+      <div class="card stat"><div class="k">รายการเคลื่อนไหวทั้งหมด</div><div class="v">${state.tx.length}</div></div>
+      <div class="card stat"><div class="k">สินค้าใกล้หมด</div><div class="v ${lowStock.length?'warn':''}">${lowStock.length}</div></div>
+    </div>
+    <div class="grid cols-2">
+      <div class="card">
+        <h3 style="margin-top:0;font-size:14.5px;">⚠ สินค้าที่ต้องสั่งเพิ่ม</h3>
+        ${lowStock.length ? `<table><thead><tr><th>สินค้า</th><th>คงเหลือ</th><th>จุดสั่งซื้อ</th></tr></thead><tbody>
+          ${lowStock.map(i=>`<tr><td>${i.name} <span class="mono" style="color:var(--muted)">(${i.sku})</span></td><td class="mono">${totalStock(i.sku)} ${i.unit}</td><td class="mono">${i.reorderPoint}</td></tr>`).join('')}
+        </tbody></table>` : `<div class="empty">ไม่มีสินค้าที่ต่ำกว่าจุดสั่งซื้อ</div>`}
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;font-size:14.5px;">รายการล่าสุด</h3>
+        ${recent.length ? `<table><thead><tr><th>ประเภท</th><th>สินค้า</th><th>จำนวน</th></tr></thead><tbody>
+          ${recent.map(t=>`<tr><td>${txTag(t.type)}</td><td>${t.sku}</td><td class="mono">${t.qty}</td></tr>`).join('')}
+        </tbody></table>` : `<div class="empty">ยังไม่มีรายการ</div>`}
+      </div>
+    </div>
+  `;
+}
+
+function txTag(type){
+  const map = { RECEIVE:['in','รับเข้า'], ISSUE:['out','เบิกออก'], TRANSFER:['mv','โอนย้าย'], ADJUST:['adj','ปรับปรุง'] };
+  const m = map[type] || ['adj', type];
+  return `<span class="tag ${m[0]}">${m[1]}</span>`;
+}
+
+function viewStock(){
+  const whs = state.warehouses;
+  return `
+    <div class="pagehead"><div><h1>สต๊อกคงเหลือ</h1><p>ยอดคงเหลือแยกตามคลังสินค้า</p></div></div>
+    <div class="searchbar"><input id="stockSearch" placeholder="ค้นหาสินค้า (ชื่อหรือ SKU)…"></div>
+    <div class="card" style="padding:0;overflow:auto;">
+      <table>
+        <thead><tr><th>สินค้า</th><th>หน่วย</th>${whs.map(w=>`<th>${w.name}</th>`).join('')}<th>รวมทั้งหมด</th></tr></thead>
+        <tbody id="stockBody">
+        ${state.items.length ? state.items.map(i=>{
+          const total = totalStock(i.sku);
+          const low = total<=i.reorderPoint;
+          const pct = Math.max(4, Math.min(100, i.reorderPoint>0 ? (total/(i.reorderPoint*2))*100 : (total>0?100:0)));
+          return `<tr data-name="${(i.name+' '+i.sku).toLowerCase()}">
+            <td>${i.name}<br><span class="mono" style="color:var(--muted);font-size:11.5px;">${i.sku}</span></td>
+            <td>${i.unit}</td>
+            ${whs.map(w=>`<td class="mono">${stockOf(i.sku,w.code)}</td>`).join('')}
+            <td><span class="gauge ${low?'low':''}"><i style="width:${pct}%"></i></span><span class="mono">${total}</span></td>
+          </tr>`;
+        }).join('') : `<tr><td colspan="${whs.length+3}"><div class="empty"><div class="big">ยังไม่มีสินค้า</div>เพิ่มสินค้าได้ที่เมนู “สินค้า”</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function moveFormOptions(){
+  return state.items.map(i=>`<option value="${i.sku}">${i.name} (${i.sku})</option>`).join('');
+}
+function whOptions(){
+  return state.warehouses.map(w=>`<option value="${w.code}">${w.name}</option>`).join('');
+}
+
+function viewMove(type){
+  const isReceive = type==='RECEIVE';
+  return `
+    <div class="pagehead"><div><h1>${isReceive?'รับสินค้าเข้าคลัง':'เบิกสินค้าออกจากคลัง'}</h1><p>${isReceive?'บันทึกสินค้าที่รับเข้าคลัง':'บันทึกสินค้าที่เบิกออกจากคลัง'}</p></div></div>
+    <div class="card" style="max-width:480px;">
+      ${!state.items.length || !state.warehouses.length ? `<div class="empty"><div class="big">ต้องมีสินค้าและคลังก่อน</div>ไปที่เมนู “สินค้า” และ “คลังสินค้า” เพื่อเพิ่มข้อมูล</div>` : `
+      <form id="moveForm">
+        <div class="field"><label>สินค้า</label><select name="sku" required><option value="">— เลือกสินค้า —</option>${moveFormOptions()}</select></div>
+        <div class="field"><label>คลัง</label><select name="wh" required><option value="">— เลือกคลัง —</option>${whOptions()}</select></div>
+        <div class="field"><label>จำนวน</label><input type="number" name="qty" min="0.0001" step="any" required></div>
+        <div class="field"><label>หมายเหตุ / เลขที่อ้างอิง</label><input type="text" name="note" placeholder="เช่น เลขที่ใบสั่งซื้อ, ผู้เบิก"></div>
+        <button class="btn primary" type="submit">${isReceive?'บันทึกรับเข้า':'บันทึกเบิกออก'}</button>
+      </form>`}
+    </div>
+  `;
+}
+
+function viewTransfer(){
+  return `
+    <div class="pagehead"><div><h1>โอนย้ายระหว่างคลัง</h1><p>ย้ายสินค้าจากคลังหนึ่งไปยังอีกคลังหนึ่ง</p></div></div>
+    <div class="card" style="max-width:480px;">
+      ${state.warehouses.length<2 ? `<div class="empty"><div class="big">ต้องมีอย่างน้อย 2 คลัง</div>เพิ่มคลังได้ที่เมนู “คลังสินค้า”</div>` : `
+      <form id="transferForm">
+        <div class="field"><label>สินค้า</label><select name="sku" required><option value="">— เลือกสินค้า —</option>${moveFormOptions()}</select></div>
+        <div class="row">
+          <div class="field"><label>จากคลัง</label><select name="wh" required><option value="">—</option>${whOptions()}</select></div>
+          <div class="field"><label>ไปคลัง</label><select name="toWh" required><option value="">—</option>${whOptions()}</select></div>
+        </div>
+        <div class="field"><label>จำนวน</label><input type="number" name="qty" min="0.0001" step="any" required></div>
+        <div class="field"><label>หมายเหตุ</label><input type="text" name="note"></div>
+        <button class="btn primary" type="submit">บันทึกการโอนย้าย</button>
+      </form>`}
+    </div>
+  `;
+}
+
+function viewHistory(){
+  const rows = [...state.tx].sort((a,b)=>b.ts.localeCompare(a.ts));
+  return `
+    <div class="pagehead"><div><h1>ประวัติรายการ</h1><p>รายการเคลื่อนไหวสต๊อกทั้งหมด (${rows.length} รายการ)</p></div></div>
+    <div class="card" style="padding:0;overflow:auto;">
+      <table>
+        <thead><tr><th>วันที่/เวลา</th><th>ประเภท</th><th>สินค้า</th><th>คลัง</th><th>จำนวน</th><th>หมายเหตุ</th><th></th></tr></thead>
+        <tbody>
+        ${rows.length ? rows.map(t=>`
+          <tr>
+            <td class="mono" style="white-space:nowrap;">${new Date(t.ts).toLocaleString('th-TH')}</td>
+            <td>${txTag(t.type)}</td>
+            <td>${t.sku}</td>
+            <td>${t.type==='TRANSFER' ? (t.wh+' → '+t.toWh) : t.wh}</td>
+            <td class="mono">${t.qty}</td>
+            <td style="color:var(--muted);">${t.note||''}</td>
+            <td><button class="btn sm danger" data-void="${t.id}">ยกเลิก</button></td>
+          </tr>`).join('') : `<tr><td colspan="7"><div class="empty">ยังไม่มีรายการเคลื่อนไหว</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function viewItems(){
+  return `
+    <div class="pagehead"><div><h1>สินค้า</h1><p>รายการสินค้าทั้งหมดในระบบ</p></div>
+      <button class="btn primary" id="btnAddItem">+ เพิ่มสินค้า</button>
+    </div>
+    <div class="card" style="padding:0;overflow:auto;">
+      <table>
+        <thead><tr><th>SKU</th><th>ชื่อสินค้า</th><th>หมวดหมู่</th><th>หน่วย</th><th>จุดสั่งซื้อ</th><th>คงเหลือรวม</th><th></th></tr></thead>
+        <tbody>
+        ${state.items.length ? state.items.map(i=>`
+          <tr>
+            <td class="mono">${i.sku}</td><td>${i.name}</td><td>${i.category||'-'}</td><td>${i.unit}</td>
+            <td class="mono">${i.reorderPoint}</td><td class="mono">${totalStock(i.sku)}</td>
+            <td><button class="btn sm" data-edit-item="${i.sku}">แก้ไข</button></td>
+          </tr>`).join('') : `<tr><td colspan="7"><div class="empty"><div class="big">ยังไม่มีสินค้า</div>เริ่มต้นด้วยการเพิ่มสินค้าชิ้นแรก</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function viewWarehouses(){
+  return `
+    <div class="pagehead"><div><h1>คลังสินค้า</h1><p>สถานที่จัดเก็บสินค้าทั้งหมด</p></div>
+      <button class="btn primary" id="btnAddWh">+ เพิ่มคลัง</button>
+    </div>
+    <div class="grid cols-3">
+      ${state.warehouses.length ? state.warehouses.map(w=>{
+        const skuCount = state.items.filter(i=>stockOf(i.sku,w.code)>0).length;
+        return `<div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:start;">
+            <div><h3 style="margin:0 0 4px;font-size:15px;">${w.name}</h3><span class="mono" style="color:var(--muted);font-size:12px;">${w.code}</span></div>
+            <button class="btn sm" data-edit-wh="${w.code}">แก้ไข</button>
+          </div>
+          <div class="kv" style="margin-top:12px;"><span>SKU ที่มีสต๊อก</span><span class="mono">${skuCount}</span></div>
+        </div>`;
+      }).join('') : `<div class="card empty" style="grid-column:1/-1;"><div class="big">ยังไม่มีคลังสินค้า</div>เพิ่มคลังแรกเพื่อเริ่มบันทึกสต๊อก</div>`}
+    </div>
+  `;
+}
+
+function viewSettings(){
+  return `
+    <div class="pagehead"><div><h1>ตั้งค่า</h1><p>การเชื่อมต่อกับ Google Sheets</p></div></div>
+    <div class="card" style="max-width:480px;">
+      <div class="kv"><span>Spreadsheet ID</span><span class="mono">${state.spreadsheetId}</span></div>
+      <div class="kv"><span>สถานะ</span><span style="color:var(--green);">เชื่อมต่อแล้ว</span></div>
+      <div style="margin-top:16px;display:flex;gap:8px;">
+        <button class="btn" id="btnResync">↻ ซิงก์ใหม่</button>
+        <button class="btn danger" id="btnDisconnect">ตัดการเชื่อมต่อ</button>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------------------------- Setup screen ---------------------------- */
+function renderSetup(){
+  root.innerHTML = `
+    <div class="setup">
+      <div class="brand" style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <span class="mark" style="background:var(--amber);width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--navy);font-weight:700;">คส</span>
+        <h1 style="margin:0;font-size:20px;">คลังพัสดุ</h1>
+      </div>
+      <p style="color:var(--muted);margin-top:0;">ระบบจัดการสต๊อกที่บันทึกข้อมูลจริงลงใน Google Sheets ของคุณเอง ต้องตั้งค่าเชื่อมต่อครั้งแรกก่อนใช้งาน</p>
+
+      <div class="card" style="margin-bottom:16px;">
+        <h3 style="margin-top:0;font-size:14.5px;"><span class="badge-step">i</span>ขั้นตอนเตรียมการ (ทำครั้งเดียว)</h3>
+        <ol>
+          <li>สร้างโปรเจกต์ที่ <code>console.cloud.google.com</code> แล้วเปิดใช้งาน <b>Google Sheets API</b></li>
+          <li>ไปที่ <b>APIs & Services → Credentials → Create Credentials → OAuth client ID</b> เลือกประเภท <b>Web application</b></li>
+          <li>ในช่อง <b>Authorized JavaScript origins</b> ให้เพิ่ม origin ของหน้านี้: <code id="originShow">${location.origin}</code></li>
+          <li>คัดลอก <b>Client ID</b> มาใส่ด้านล่าง</li>
+          <li>สร้าง Google Sheet เปล่าไว้ 1 ไฟล์ แล้วคัดลอก <b>Spreadsheet ID</b> จาก URL (ส่วนระหว่าง <code>/d/</code> กับ <code>/edit</code>)</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <div class="field"><label>Google OAuth Client ID</label><input id="inClientId" placeholder="xxxxxxxx.apps.googleusercontent.com" value="${state.clientId}"></div>
+        <div class="field"><label>Spreadsheet ID</label><input id="inSpreadsheetId" placeholder="1AbC...xyz" value="${state.spreadsheetId}"></div>
+        <button class="btn primary" id="btnConnect" ${state.connecting?'disabled':''}>${state.connecting?'กำลังเชื่อมต่อ…':'เชื่อมต่อ Google Sheets'}</button>
+        <div id="setupErr" style="color:var(--red);font-size:13px;margin-top:10px;"></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('btnConnect').onclick = doConnect;
+}
+
+async function doConnect(){
+  const cid = document.getElementById('inClientId').value.trim();
+  const sid = document.getElementById('inSpreadsheetId').value.trim();
+  const err = document.getElementById('setupErr');
+  err.textContent='';
+  if(!cid || !sid){ err.textContent = 'กรุณากรอก Client ID และ Spreadsheet ID'; return; }
+  state.clientId = cid; state.spreadsheetId = sid;
+  state.connecting = true; renderSetup();
+  try{
+    await requestToken(true);
+    await ensureSheetsExist();
+    await readAll();
+    state.connected = true;
+    await saveSettings();
+    toast('เชื่อมต่อสำเร็จ','ok');
+    render();
+  }catch(e){
+    state.connecting = false;
+    renderSetup();
+    document.getElementById('setupErr').textContent = 'เชื่อมต่อไม่สำเร็จ: ' + e.message;
+  }
+}
+
+/* ---------------------------- Modals ---------------------------- */
+function openModal(html){
+  const bg = document.createElement('div');
+  bg.className='modal-bg';
+  bg.innerHTML = `<div class="modal">${html}</div>`;
+  bg.onclick = (e)=>{ if(e.target===bg) bg.remove(); };
+  document.body.appendChild(bg);
+  return bg;
+}
+
+function modalAddItem(){
+  const m = openModal(`
+    <h3>เพิ่มสินค้าใหม่</h3>
+    <form id="fItem">
+      <div class="row"><div class="field"><label>SKU</label><input name="sku" required></div><div class="field"><label>หน่วยนับ</label><input name="unit" required placeholder="ชิ้น / กล่อง / กก."></div></div>
+      <div class="field"><label>ชื่อสินค้า</label><input name="name" required></div>
+      <div class="row"><div class="field"><label>หมวดหมู่</label><input name="category"></div><div class="field"><label>จุดสั่งซื้อขั้นต่ำ</label><input name="reorderPoint" type="number" value="0" min="0" step="any"></div></div>
+      <div class="modal-actions"><button type="button" class="btn" id="cancelM">ยกเลิก</button><button type="submit" class="btn primary">บันทึก</button></div>
+    </form>
+  `);
+  m.querySelector('#cancelM').onclick = ()=>m.remove();
+  m.querySelector('#fItem').onsubmit = async (e)=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const sku = f.get('sku').trim();
+    if(itemBySku(sku)){ alert('SKU นี้มีอยู่แล้ว'); return; }
+    const row = [sku, f.get('name'), f.get('category')||'', f.get('unit'), parseFloat(f.get('reorderPoint')||'0')||0, 'TRUE'];
+    await appendRow('Items', row);
+    state.items.push({ rowNum: state.items.length+2, sku, name:f.get('name'), category:f.get('category')||'', unit:f.get('unit'), reorderPoint: parseFloat(f.get('reorderPoint')||'0')||0, active:true });
+    m.remove(); toast('เพิ่มสินค้าแล้ว','ok'); render();
+  };
+}
+
+function modalEditItem(sku){
+  const item = itemBySku(sku);
+  if(!item) return;
+  const m = openModal(`
+    <h3>แก้ไขสินค้า</h3>
+    <form id="fItem">
+      <div class="row"><div class="field"><label>SKU</label><input value="${item.sku}" disabled></div><div class="field"><label>หน่วยนับ</label><input name="unit" required value="${item.unit}"></div></div>
+      <div class="field"><label>ชื่อสินค้า</label><input name="name" required value="${item.name}"></div>
+      <div class="row"><div class="field"><label>หมวดหมู่</label><input name="category" value="${item.category||''}"></div><div class="field"><label>จุดสั่งซื้อขั้นต่ำ</label><input name="reorderPoint" type="number" value="${item.reorderPoint}" min="0" step="any"></div></div>
+      <div class="modal-actions">
+        <button type="button" class="btn danger" id="delM">ลบสินค้า</button>
+        <button type="button" class="btn" id="cancelM">ยกเลิก</button>
+        <button type="submit" class="btn primary">บันทึก</button>
+      </div>
+    </form>
+  `);
+  m.querySelector('#cancelM').onclick = ()=>m.remove();
+  m.querySelector('#delM').onclick = async ()=>{
+    if(!confirm('ยืนยันลบสินค้านี้? (จะซ่อนจากระบบ ประวัติเดิมยังอยู่ใน Sheet)')) return;
+    item.active=false;
+    await updateRow('Items', item.rowNum, [item.sku,item.name,item.category,item.unit,item.reorderPoint,'FALSE']);
+    state.items = state.items.filter(i=>i.sku!==sku);
+    m.remove(); toast('ลบสินค้าแล้ว','ok'); render();
+  };
+  m.querySelector('#fItem').onsubmit = async (e)=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    item.name=f.get('name'); item.category=f.get('category')||''; item.unit=f.get('unit'); item.reorderPoint=parseFloat(f.get('reorderPoint')||'0')||0;
+    await updateRow('Items', item.rowNum, [item.sku,item.name,item.category,item.unit,item.reorderPoint,'TRUE']);
+    m.remove(); toast('บันทึกแล้ว','ok'); render();
+  };
+}
+
+function modalAddWh(){
+  const m = openModal(`
+    <h3>เพิ่มคลังสินค้า</h3>
+    <form id="fWh">
+      <div class="field"><label>รหัสคลัง</label><input name="code" required placeholder="เช่น WH1"></div>
+      <div class="field"><label>ชื่อคลัง</label><input name="name" required placeholder="เช่น คลังหลัก สาขาสีลม"></div>
+      <div class="modal-actions"><button type="button" class="btn" id="cancelM">ยกเลิก</button><button type="submit" class="btn primary">บันทึก</button></div>
+    </form>
+  `);
+  m.querySelector('#cancelM').onclick = ()=>m.remove();
+  m.querySelector('#fWh').onsubmit = async (e)=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const code = f.get('code').trim();
+    if(whByCode(code)){ alert('รหัสคลังนี้มีอยู่แล้ว'); return; }
+    await appendRow('Warehouses', [code, f.get('name'), 'TRUE']);
+    state.warehouses.push({ rowNum: state.warehouses.length+2, code, name:f.get('name'), active:true });
+    m.remove(); toast('เพิ่มคลังแล้ว','ok'); render();
+  };
+}
+
+function modalEditWh(code){
+  const w = whByCode(code);
+  if(!w) return;
+  const m = openModal(`
+    <h3>แก้ไขคลังสินค้า</h3>
+    <form id="fWh">
+      <div class="field"><label>รหัสคลัง</label><input value="${w.code}" disabled></div>
+      <div class="field"><label>ชื่อคลัง</label><input name="name" required value="${w.name}"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn danger" id="delM">ลบคลัง</button>
+        <button type="button" class="btn" id="cancelM">ยกเลิก</button>
+        <button type="submit" class="btn primary">บันทึก</button>
+      </div>
+    </form>
+  `);
+  m.querySelector('#cancelM').onclick = ()=>m.remove();
+  m.querySelector('#delM').onclick = async ()=>{
+    if(!confirm('ยืนยันลบคลังนี้?')) return;
+    await updateRow('Warehouses', w.rowNum, [w.code,w.name,'FALSE']);
+    state.warehouses = state.warehouses.filter(x=>x.code!==code);
+    m.remove(); toast('ลบคลังแล้ว','ok'); render();
+  };
+  m.querySelector('#fWh').onsubmit = async (e)=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    w.name = f.get('name');
+    await updateRow('Warehouses', w.rowNum, [w.code,w.name,'TRUE']);
+    m.remove(); toast('บันทึกแล้ว','ok'); render();
+  };
+}
+
+/* ---------------------------- Event binding ---------------------------- */
+function bindViewEvents(){
+  const btnSync = document.getElementById('btnSync');
+  if(btnSync) btnSync.onclick = async ()=>{ btnSync.disabled=true; btnSync.textContent='กำลังซิงก์…'; try{ await readAll(); toast('ซิงก์ข้อมูลล่าสุดแล้ว','ok'); }catch(e){ toast('ซิงก์ไม่สำเร็จ: '+e.message,'err'); } render(); };
+
+  const btnResync = document.getElementById('btnResync');
+  if(btnResync) btnResync.onclick = async ()=>{ try{ await readAll(); toast('ซิงก์แล้ว','ok'); }catch(e){ toast('ผิดพลาด: '+e.message,'err'); } render(); };
+
+  const btnDisc = document.getElementById('btnDisconnect');
+  if(btnDisc) btnDisc.onclick = async ()=>{
+    if(!confirm('ตัดการเชื่อมต่อ? ข้อมูลจะยังอยู่ใน Google Sheet เดิม')) return;
+    state.connected=false; state.accessToken=''; state.clientId=''; state.spreadsheetId='';
+    await saveSettings();
+    render();
+  };
+
+  const btnAddItem = document.getElementById('btnAddItem');
+  if(btnAddItem) btnAddItem.onclick = modalAddItem;
+  const btnAddWh = document.getElementById('btnAddWh');
+  if(btnAddWh) btnAddWh.onclick = modalAddWh;
+
+  document.querySelectorAll('[data-edit-item]').forEach(b=> b.onclick = ()=> modalEditItem(b.dataset.editItem));
+  document.querySelectorAll('[data-edit-wh]').forEach(b=> b.onclick = ()=> modalEditWh(b.dataset.editWh));
+  document.querySelectorAll('[data-void]').forEach(b=> b.onclick = ()=>{
+    const tx = state.tx.find(t=>t.id===b.dataset.void);
+    if(tx) voidTransactionFixed(tx);
+  });
+
+  const stockSearch = document.getElementById('stockSearch');
+  if(stockSearch) stockSearch.oninput = ()=>{
+    const q = stockSearch.value.toLowerCase();
+    document.querySelectorAll('#stockBody tr[data-name]').forEach(tr=>{
+      tr.style.display = tr.dataset.name.includes(q) ? '' : 'none';
+    });
+  };
+
+  const moveForm = document.getElementById('moveForm');
+  if(moveForm) moveForm.onsubmit = async (e)=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const type = state.view==='receive' ? 'RECEIVE' : 'ISSUE';
+    const qty = parseFloat(f.get('qty'));
+    const sku = f.get('sku'), wh = f.get('wh');
+    if(type==='ISSUE'){
+      const avail = stockOf(sku, wh);
+      if(qty > avail){ if(!confirm(`คงเหลือในคลังนี้เพียง ${avail} หน่วย ต้องการเบิก ${qty} หน่วยหรือไม่? (สต๊อกจะติดลบ)`)) return; }
+    }
+    const btn = e.target.querySelector('button[type=submit]'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
+    try{
+      await addTransaction(type, sku, wh, '', qty, f.get('note')||'');
+      toast(type==='RECEIVE'?'บันทึกรับเข้าแล้ว':'บันทึกเบิกออกแล้ว','ok');
+      e.target.reset();
+    }catch(err){ toast('บันทึกไม่สำเร็จ: '+err.message,'err'); }
+    render();
+  };
+
+  const transferForm = document.getElementById('transferForm');
+  if(transferForm) transferForm.onsubmit = async (e)=>{
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const sku=f.get('sku'), wh=f.get('wh'), toWh=f.get('toWh'), qty=parseFloat(f.get('qty'));
+    if(wh===toWh){ alert('คลังต้นทางและปลายทางต้องไม่ใช่คลังเดียวกัน'); return; }
+    const avail = stockOf(sku, wh);
+    if(qty > avail){ if(!confirm(`คงเหลือในคลังต้นทางเพียง ${avail} หน่วย ต้องการโอน ${qty} หน่วยหรือไม่?`)) return; }
+    try{
+      await addTransaction('TRANSFER', sku, wh, toWh, qty, f.get('note')||'');
+      toast('บันทึกการโอนย้ายแล้ว','ok');
+      e.target.reset();
+    }catch(err){ toast('บันทึกไม่สำเร็จ: '+err.message,'err'); }
+    render();
+  };
+}
+
+async function voidTransactionFixed(tx){
+  if(!confirm('ยกเลิกรายการนี้? ระบบจะบันทึกรายการกลับด้านเพื่อหักล้างยอด')) return;
+  const note = 'ยกเลิกรายการ '+tx.id;
+  try{
+    if(tx.type==='RECEIVE') await addTransaction('ADJUST', tx.sku, tx.wh, '', -tx.qty, note, tx.id);
+    else if(tx.type==='ISSUE') await addTransaction('ADJUST', tx.sku, tx.wh, '', tx.qty, note, tx.id);
+    else if(tx.type==='ADJUST') await addTransaction('ADJUST', tx.sku, tx.wh, '', -tx.qty, note, tx.id);
+    else if(tx.type==='TRANSFER') await addTransaction('TRANSFER', tx.sku, tx.toWh, tx.wh, tx.qty, note, tx.id);
+    toast('ยกเลิกรายการแล้ว','ok');
+  }catch(err){ toast('ยกเลิกไม่สำเร็จ: '+err.message,'err'); }
+  render();
+}
+
+/* ---------------------------- Boot ---------------------------- */
+(async function boot(){
+  await loadSettings();
+  render();
+  if(state.clientId && state.spreadsheetId){
+    // attempt silent reconnect
+    state.connecting = true; renderSetup();
+    try{
+      await requestToken(false).catch(()=>requestToken(true));
+      await ensureSheetsExist();
+      await readAll();
+      state.connected = true;
+      render();
+    }catch(e){
+      state.connecting = false;
+      render();
+    }
+  }
+})();
+</script>
+</body>
+</html>
